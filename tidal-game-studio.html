@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tidal Game Studio</title><style>
+:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#0a1020;color:#e6efff;font:14px system-ui}header{padding:17px 22px;border-bottom:1px solid #2c3b56;display:flex;gap:18px;align-items:center}h1{margin:0;font-size:22px}header span,.muted{color:#a0b4d0}main{display:grid;grid-template-columns:minmax(320px,.85fr) minmax(360px,1.3fr);gap:16px;padding:16px}.panel{background:#111d30;border:1px solid #2c3b56;border-radius:10px;overflow:hidden;margin-bottom:16px}.bar{display:flex;gap:8px;align-items:center;padding:11px;flex-wrap:wrap;border-bottom:1px solid #2c3b56}h2{font-size:15px;margin:0 6px 0 0}button,select{font:inherit;background:#243650;color:#e6efff;border:1px solid #415572;border-radius:5px;padding:8px;cursor:pointer}button:hover{filter:brightness(1.2)}.primary{background:#63e4ce;color:#082d29;border:0;font-weight:700}textarea{display:block;width:100%;height:600px;resize:vertical;background:#080f1c;color:#bdf6e7;border:0;padding:18px;outline:none;font:13px/1.65 ui-monospace,monospace;tab-size:2}textarea:focus{box-shadow:inset 0 0 0 2px #63e4ce77}.stage{height:520px;background:#080f1c}canvas{width:100%;height:100%;display:block;outline:none}canvas:focus{box-shadow:inset 0 0 0 2px #63e4ce}.help{font-size:12px;color:#a0b4d0;padding:12px;line-height:1.6}pre{margin:0;padding:14px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:220px;overflow:auto;color:#bde8db}details{padding:14px;line-height:1.7}summary{cursor:pointer;color:#63e4ce}table{border-collapse:collapse;width:100%;font-size:12px}td,th{padding:7px;border-bottom:1px solid #2c3b56;text-align:left;vertical-align:top}code{color:#9be8d8}#inspector{font:12px/1.8 monospace;max-height:200px;overflow:auto;white-space:pre-wrap}.error{color:#ffb1b1}#file{display:none}@media(max-width:880px){main{grid-template-columns:1fr}.stage{height:440px}textarea{height:430px}header{flex-wrap:wrap}}
+</style></head><body><header><h1>Tidal Game Studio</h1><span>washup game · top-down 2D game prototype</span></header><main><div><section class="panel"><div class="bar"><h2>Source</h2><select id="examples" aria-label="Example game"></select><button id="load">Load</button></div><textarea id="code" aria-label="Tidal source code" spellcheck="false"></textarea><div class="bar"><button class="primary" id="run">Run / Restart</button><button id="pause">Pause</button><button id="stop">Stop</button><button id="save">Save .tidal</button><button id="open">Open</button><input id="file" type="file" accept=".tidal,.txt"></div><div class="help">Ctrl/⌘ + Enter runs the current source. The runner interprets Tidal commands; it does not execute source as JavaScript. Saved locally when Run succeeds.</div><details><summary>Language reference and game rules</summary><div id="docs"></div></details></section></div><div><section class="panel"><div class="bar"><h2>Game preview</h2><button id="grid">Grid</button><button id="png">Save PNG</button><span id="status" class="muted"></span></div><div class="stage"><canvas tabindex="0" id="view" aria-label="Game preview. Click to focus, use WASD or arrows, Space to shoot, P to pause, R to restart."></canvas></div><div class="help">Click the preview to play. P: pause · R: restart · Space: shoot if enabled. Diagonal movement is normalized. Preview loses input focus when you edit code.</div></section><section class="panel"><div class="bar"><h2>Runner output</h2><button id="clear">Clear</button></div><pre id="log" role="status" aria-live="polite"></pre><details><summary>Live scene inspector</summary><div id="inspector"></div></details></section></div></main><script>
+'use strict';
+const $=id=>document.getElementById(id),editor=$('code'),canvas=$('view'),ctx=canvas.getContext('2d');
+const examples={
+'Crystal Run — complete game':`washup 2D
+washup language
+washup game
+
+title "Crystal Run"
+background #0b1529
+world 26 18
+grid off
+camera follow
+hud on
+win score 5
+
+spawn player as hero
+x -10
+y 0
+scale (0.8)
+color #63e4ce
+control wasd 5
+health 6
+shoot on
+fire rate 5
+bullet damage 1
+
+spawn wall as northGate
+x -3
+y 3
+width 1
+height 6
+color #344d70
+spawn wall as southGate
+x 3
+y -3
+width 1
+height 6
+color #344d70
+
+spawn enemy as hunter
+x 7
+y 5
+behavior chase
+speed 1.8
+health 3
+color #ff6f91
+spawn enemy as guard
+x 8
+y -5
+behavior patrol x 3
+speed 2
+health 2
+spawn enemy as drifter
+x -7
+y 6
+behavior wander
+speed 1.5
+health 2
+
+repeat 5 {
+  spawn coin
+  x index * 4 - 8
+  y cos(index * pi) * 6
+  value 1
+  color #ffd166
+}
+spawn medkit
+x 10
+y 0
+heal 2
+print "Collect 5 crystals. Avoid enemies. Space to shoot."x1
+x 0
+y 8
+`,
+'Survival arena':`washup 2D
+washup language
+washup game
+title "Tidal Survival"
+world 24 18
+camera follow
+grid off
+win survive 45
+spawn player as hero
+health 8
+control arrows 5
+shoot on
+fire rate 6
+spawn spawner as portal
+x 9
+y 6
+color #bd93f9
+interval 3
+limit 12
+speed 2
+health 2
+spawn wall
+x -4
+width 1
+height 7
+spawn medkit
+x -8
+y -5
+heal 3
+print "Survive for 45 seconds"x1.5
+y 7
+`,
+'Patrol and goal':`washup 2D
+washup game
+washup language
+title "Reach the Gate"
+world 22 16
+grid off
+spawn player
+x -8
+control wasd 4
+health 3
+spawn enemy
+behavior patrol y 5
+speed 3
+health 2
+spawn enemy
+x 4
+behavior chase
+speed 1.5
+spawn goal
+x 9
+width 1.5
+height 3
+color #63e4ce
+print "Reach the green gate"x1.4
+y 6
+`,
+'Language and shapes':`washup language
+washup 2D
+background #101827
+print "Hello World"x4 as greeting
+y 3
+color turquoise
+spawn square scale (2) as box
+x -3
+y -1
+color #a99bff
+spin 30
+spawn circle
+x 3
+y -1
+scale (2)
+color #ffd166
+pulse 0.2 1
+`,
+'Original Tidal':`washup 2D
+spawn square scale (2)
+x 2
+z 2
+y 2
+`};
+const docs=[
+['Imports','washup 2D / washup language / washup game','Import 2D for shapes, language for print/echo, game for game entities and settings.'],
+['Game entities','spawn player | enemy | coin | wall | goal | medkit | spawner as name','Optional unique name and scale (n). Only one player.'],
+['Shapes','spawn square | rectangle | circle | ellipse | triangle | line','Supports scale (2) and as name. Decorative; no collisions.'],
+['Text','print "Hello World"x4 as title','x4 scales text to 4×16px. Text is in world coordinates. JSON-style escapes supported.'],
+['Log','echo "Ready"','Writes to output; requires language.'],
+['Object target','select hero','Property commands affect latest created or selected object.'],
+['Position','x 2 / y -1 / z 3','x right, y up; z controls draw order.'],
+['Appearance','scale (2) / width 2 / height 3 / color blue','Positive dimensions in world units. A square starts 1×1.'],
+['More appearance','rotate 45 / opacity 0.5 / stroke white / thickness 2','Use stroke none to remove outlines.'],
+['Animation','spin 30 / move 1 0 / pulse 0.2 1','Degrees/s, x/y units/s, amplitude and frequency Hz.'],
+['Text alignment','align left | center | right','Default center.'],
+['Controls','control wasd 5 / control arrows 5 / control off','Player only; units/s. Both modes support normalized diagonal movement.'],
+['Enemies','behavior chase | wander | still | patrol x 3 | patrol y 3','Patrol radius around starting position. Wander uses deterministic directions.'],
+['Combat','health 5 / damage 1 / speed 2','Health: player, enemy or spawner. Damage: enemy/spawner contact damage. Speed: player/enemy/spawner.'],
+['Shooting','shoot on / fire rate 5 / bullet speed 12 / bullet damage 1','Player; hold Space. Shoots in last movement direction. Bullets expire after 2 seconds.'],
+['Collectibles','value 1 / heal 2','Coin score and medkit health restoration. Killing enemies also awards 1 point.'],
+['Spawners','interval 3 / limit 12','Spawn one enemy per interval up to limit enemies owned by that portal. Speed, health and damage configure spawned enemies.'],
+['World','world 26 18 / camera follow | fixed / zoom 1','World centered at origin. Players and enemies collide with world edges and walls.'],
+['Scene','background #101827 / grid on | off / title "Game" / hud on | off','Game settings require game import; background/grid/zoom do not.'],
+['Win rules','win score 5 / win survive 45 / win clear','Last rule wins. Goals always win on contact. Without a rule, play continues until defeat or goal.'],
+['Variables','let count = 5 / repeat count { … }','Repeat braces on separate lines; index begins at 0. Expressions support + - * / % ^ and parentheses.'],
+['Math','sin(x), cos(x), abs(x), sqrt(x), min(a,b), max(a,b)','Also floor, ceil, round, pi and tau. Arguments use radians.'],
+['Visibility','hide / show / delete','Hide disables rendering and gameplay for that object. Delete removes it at compile time.'],
+['Game rules','Contact invulnerability: 1 second','Axis-aligned rectangular hitboxes, including circles. No gravity/platform physics. Enemies do not pathfind around walls. Win clear requires no active enemies and no active spawners.'],
+['Prototype limits','2D only; no 3D environment','Maximum 1500 authored objects, 300 active enemies, 200 bullets; 20000 compile steps. No audio or multiplayer.']];
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+$('docs').innerHTML='<table><tr><th>Feature</th><th>Syntax</th><th>Behavior</th></tr>'+docs.map(r=>'<tr>'+r.map(s=>'<td>'+esc(s)+'</td>').join('')+'</tr>').join('')+'</table>';
+for(const name of Object.keys(examples)){const o=document.createElement('option');o.textContent=name;$('examples').append(o)}
+let scene=[],bullets=[],settings,player=null,keys=new Set(),state='stopped',time=0,score=0,kills=0,last=0,acc=0,lastInfo=0,cam={x:0,y:0},shotClock=0,uid=0;
+const defaults=()=>({game:false,title:'Tidal',background:'#0b1529',grid:true,zoom:1,worldW:26,worldH:18,camera:'fixed',hud:true,win:null});settings=defaults();
+function log(s,error=false){$('log').textContent=s;$('log').className=error?'error':''}
+function clean(s){let quoted=false,escaped=false;for(let i=0;i<s.length;i++){if(escaped){escaped=false;continue}if(s[i]==='\\'&&quoted){escaped=true;continue}if(s[i]==='"')quoted=!quoted;if(!quoted&&s.slice(i,i+2)==='//')return s.slice(0,i)}return s}
+function calc(s,vars){if(s.length>500)throw Error('Expression too long');const ts=[];let pos=0;while(pos<s.length){let m;const r=s.slice(pos);if((m=r.match(/^\s+/))){pos+=m[0].length;continue}if((m=r.match(/^(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?/i))){ts.push({k:'n',v:+m[0]});pos+=m[0].length;continue}if((m=r.match(/^[A-Za-z_]\w*/))){ts.push({k:'id',v:m[0]});pos+=m[0].length;continue}if('+-*/%^(),'.includes(r[0])){ts.push({k:r[0]});pos++;continue}throw Error('Invalid expression character '+r[0])}let i=0,depth=0;const is=k=>ts[i]?.k===k;function take(k){if(!is(k))throw Error('Expected '+k);return ts[i++]}const funcs={sin:Math.sin,cos:Math.cos,abs:Math.abs,sqrt:Math.sqrt,floor:Math.floor,ceil:Math.ceil,round:Math.round,min:Math.min,max:Math.max};function atom(){if(++depth>40)throw Error('Expression nesting limit');let v;if(is('+')||is('-')){const op=ts[i++].k;v=atom()*(op==='-'?-1:1)}else if(is('n'))v=ts[i++].v;else if(is('(')){i++;v=add();take(')')}else if(is('id')){const n=ts[i++].v;if(is('(')){i++;const a=[];if(!is(')')){a.push(add());while(is(',')){i++;a.push(add())}}take(')');if(!Object.hasOwn(funcs,n))throw Error('Unknown function '+n);if(a.length!==(['min','max'].includes(n)?2:1))throw Error('Wrong argument count for '+n);v=funcs[n](...a)}else if(Object.hasOwn(vars,n))v=vars[n];else if(n==='pi')v=Math.PI;else if(n==='tau')v=2*Math.PI;else throw Error('Unknown variable '+n)}else throw Error('Expected a number');depth--;return v}function power(){let a=atom();if(is('^')){i++;a=a**power()}return a}function mul(){let a=power();while(is('*')||is('/')||is('%')){const op=ts[i++].k,b=power();a=op==='*'?a*b:op==='/'?a/b:a%b}return a}function add(){let a=mul();while(is('+')||is('-')){const op=ts[i++].k,b=mul();a=op==='+'?a+b:a-b}return a}const value=add();if(i!==ts.length)throw Error('Unexpected expression token');if(!Number.isFinite(value)||Math.abs(value)>100000)throw Error('Number must be finite within ±100000');return value}
+function entity(type){return {id:++uid,name:'',type,x:0,y:0,z:0,scale:1,width:1,height:1,color:({player:'#63e4ce',enemy:'#ff6f91',coin:'#ffd166',wall:'#344d70',goal:'#4be1ae',medkit:'#72f0ba',spawner:'#b69aff',text:'#e6efff'})[type]||'#63e4ce',rotation:0,opacity:1,stroke:null,thickness:1,spin:0,vx:0,vy:0,pulse:0,hz:1,hidden:false,dead:false,align:'center',health:type==='player'?5:2,maxHealth:5,damage:1,speed:type==='player'?5:1.8,behavior:'chase',axis:'x',radius:3,dir:1,control:type==='player'?'wasd':null,shoot:false,rate:5,bulletSpeed:12,bulletDamage:1,value:1,heal:2,interval:3,limit:10,timer:0,inv:0,aimX:1,aimY:0}}
+function compile(source){if(source.length>200000)throw Error('Source exceeds 200 KB');const lines=source.split(/\r?\n/).map((s,i)=>({s:clean(s).trim(),line:i+1}));let at=0;function block(nested=false,depth=0){if(depth>10)throw Error('Repeat nesting limit');const a=[];while(at<lines.length){const r=lines[at++];if(!r.s)continue;if(r.s==='}'){if(!nested)throw Error('Line '+r.line+': unexpected }');return a}const m=r.s.match(/^repeat\s+(.+)\s*\{$/i);a.push(m?{...r,repeat:m[1],body:block(true,depth+1)}:r)}if(nested)throw Error('Missing closing }');return a}const ast=block(),objs=[],cfg=defaults(),vars=Object.create(null),imports=new Set(),messages=[];let current=null,steps=0,names=0;const num=s=>calc(s,vars);function positive(s){const n=num(s);if(n<=0)throw Error('Value must be positive');return n}function need(){if(!current)throw Error('Create or select an object first');return current}function game(){if(!imports.has('game'))throw Error('Import washup game first')}function only(types){const o=need();if(!types.includes(o.type))throw Error('Command requires '+types.join(' or '));return o}function color(s){if(!CSS.supports('color',s)||/^(inherit|initial|unset|revert|currentcolor)$/i.test(s)||/var\(/i.test(s))throw Error('Use a concrete CSS color');return s}function create(type,name){if(objs.length>=1500)throw Error('Object limit: 1500');if(type==='player'&&objs.some(o=>o.type==='player'))throw Error('Only one player is allowed');const o=entity(type);if(name&&objs.some(o=>o.name===name))throw Error('Duplicate name '+name);o.name=name||'object_'+(++names);while(!name&&objs.some(a=>a.name===o.name))o.name='object_'+(++names);objs.push(o);current=o;return o}
+function execute(nodes){for(const row of nodes){try{if(++steps>20000)throw Error('Command limit: 20000');if(row.repeat!==undefined){const n=num(row.repeat);if(!Number.isInteger(n)||n<0||n>1000)throw Error('Repeat needs an integer 0–1000');const had=Object.hasOwn(vars,'index'),old=vars.index;for(let j=0;j<n;j++){vars.index=j;execute(row.body)}if(had)vars.index=old;else delete vars.index;continue}const s=row.s;let m;
+if((m=s.match(/^washup\s+(\S+)$/i))){const e=m[1].toLowerCase();if(!['2d','language','game'].includes(e))throw Error('Supported environments: 2D, language, game');imports.add(e);if(e==='game')cfg.game=true;continue}
+if((m=s.match(/^let\s+([A-Za-z_]\w*)\s*=\s*(.+)$/i))){if(['index','pi','tau'].includes(m[1]))throw Error('Reserved variable');vars[m[1]]=num(m[2]);continue}
+if((m=s.match(/^(print|echo|title)\s+("(?:[^"\\]|\\.)*")(.*)$/i))){const command=m[1].toLowerCase();if(command==='title')game();else if(!imports.has('language'))throw Error('Import washup language first');let text;try{text=JSON.parse(m[2])}catch{throw Error('Invalid quoted string')}let tail=m[3].trim();if(command!=='print'){if(tail)throw Error('Unexpected text after string');if(command==='title')cfg.title=text;else messages.push(text);continue}let name;const named=tail.match(/(?:^|\s)as\s+([A-Za-z_]\w*)$/i);if(named){name=named[1];tail=tail.slice(0,named.index).trim()}const o=create('text',name);o.text=text;if(tail){if(!/^x/i.test(tail))throw Error('Use print "text"x4');o.scale=positive(tail.slice(1))}continue}
+if((m=s.match(/^spawn\s+(\w+)(?:\s+scale\s*\((.+)\))?(?:\s+as\s+([A-Za-z_]\w*))?$/i))){const type=m[1].toLowerCase();if(['player','enemy','wall','coin','goal','medkit','spawner'].includes(type))game();else if(['square','rectangle','circle','ellipse','triangle','line'].includes(type)){if(!imports.has('2d'))throw Error('Import washup 2D first')}else throw Error('Unknown entity '+type);const o=create(type,m[3]);if(m[2])o.scale=positive(m[2]);if(['rectangle','ellipse'].includes(type))o.width=2;if(type==='coin'){o.width=.5;o.height=.5}if(type==='medkit'){o.width=.65;o.height=.65}continue}
+if((m=s.match(/^select\s+([A-Za-z_]\w*)$/i))){current=objs.find(o=>o.name===m[1]);if(!current)throw Error('Unknown object '+m[1]);continue}
+if((m=s.match(/^background\s+(.+)$/i))){cfg.background=color(m[1]);continue}if((m=s.match(/^grid\s+(on|off)$/i))){cfg.grid=m[1].toLowerCase()==='on';continue}if((m=s.match(/^zoom\s+(.+)$/i))){cfg.zoom=positive(m[1]);if(cfg.zoom<.1||cfg.zoom>5)throw Error('Zoom range .1–5');continue}
+if((m=s.match(/^world\s+(\S+)\s+(\S+)$/i))){game();cfg.worldW=positive(m[1]);cfg.worldH=positive(m[2]);if(cfg.worldW<2||cfg.worldH<2||cfg.worldW>1000||cfg.worldH>1000)throw Error('World dimensions: 2–1000');continue}
+if((m=s.match(/^camera\s+(follow|fixed)$/i))){game();cfg.camera=m[1].toLowerCase();continue}if((m=s.match(/^hud\s+(on|off)$/i))){game();cfg.hud=m[1].toLowerCase()==='on';continue}
+if((m=s.match(/^win\s+(score|survive)\s+(.+)$/i))){game();cfg.win={type:m[1].toLowerCase(),target:positive(m[2])};continue}if(/^win\s+clear$/i.test(s)){game();cfg.win={type:'clear'};continue}
+if((m=s.match(/^([xyz])\s+(.+)$/i))){need()[m[1].toLowerCase()]=num(m[2]);continue}if((m=s.match(/^scale\s*\((.+)\)$/i))){need().scale=positive(m[1]);continue}
+if((m=s.match(/^(width|height)\s+(.+)$/i))){const o=need();if(o.type==='text')throw Error('Use scale for text');o[m[1].toLowerCase()]=positive(m[2]);continue}
+if((m=s.match(/^(color|stroke)\s+(.+)$/i))){need()[m[1].toLowerCase()]=m[1].toLowerCase()==='stroke'&&m[2].toLowerCase()==='none'?null:color(m[2]);continue}
+if((m=s.match(/^(rotate|spin|opacity|thickness)\s+(.+)$/i))){const prop=m[1].toLowerCase(),v=num(m[2]);if(prop==='opacity'&&(v<0||v>1))throw Error('Opacity range 0–1');if(prop==='thickness'&&v<0)throw Error('Thickness must be nonnegative');need()[prop==='rotate'?'rotation':prop]=v;continue}
+if((m=s.match(/^align\s+(left|center|right)$/i))){only(['text']).align=m[1].toLowerCase();continue}if((m=s.match(/^move\s+(\S+)\s+(\S+)$/i))){const o=need();o.vx=num(m[1]);o.vy=num(m[2]);continue}if((m=s.match(/^pulse\s+(\S+)\s+(\S+)$/i))){const o=need();o.pulse=num(m[1]);o.hz=num(m[2]);if(o.pulse<0||o.pulse>=1||o.hz<0||o.hz>100)throw Error('Pulse amplitude 0–<1; frequency 0–100');continue}
+if((m=s.match(/^control\s+(wasd|arrows)(?:\s+(.+))?$/i))){game();const o=only(['player']);o.control=m[1].toLowerCase();if(m[2])o.speed=positive(m[2]);continue}if(/^control\s+off$/i.test(s)){only(['player']).control=null;continue}
+if((m=s.match(/^behavior\s+(chase|wander|still)$/i))){game();only(['enemy']).behavior=m[1].toLowerCase();continue}if((m=s.match(/^behavior\s+patrol\s+(x|y)\s+(.+)$/i))){game();const o=only(['enemy']);o.behavior='patrol';o.axis=m[1].toLowerCase();o.radius=positive(m[2]);continue}
+if((m=s.match(/^(health|damage|speed)\s+(.+)$/i))){game();const prop=m[1].toLowerCase(),o=only(prop==='speed'?['player','enemy','spawner']:prop==='health'?['player','enemy','spawner']:['enemy','spawner']);o[prop]=positive(m[2]);if(prop==='speed'&&o.speed>30)throw Error('Game speed limit: 30');if(prop==='health')o.maxHealth=o.health;continue}
+if((m=s.match(/^shoot\s+(on|off)$/i))){game();only(['player']).shoot=m[1].toLowerCase()==='on';continue}if((m=s.match(/^(fire rate|bullet speed|bullet damage)\s+(.+)$/i))){game();const o=only(['player']),v=positive(m[2]),prop={'fire rate':'rate','bullet speed':'bulletSpeed','bullet damage':'bulletDamage'}[m[1].toLowerCase()];if(prop==='rate'&&v>30)throw Error('Maximum fire rate 30');if(prop==='bulletSpeed'&&v>60)throw Error('Maximum bullet speed 60');o[prop]=v;continue}
+if((m=s.match(/^(value|heal|interval|limit)\s+(.+)$/i))){game();const prop=m[1].toLowerCase(),o=only(prop==='value'?['coin']:prop==='heal'?['medkit']:['spawner']),v=positive(m[2]);if(prop==='interval'&&v<.25)throw Error('Minimum spawn interval .25 seconds');if(prop==='limit'&&(!Number.isInteger(v)||v>100))throw Error('Spawner limit: integer 1–100');o[prop]=v;continue}
+if(/^(hide|show|delete)$/i.test(s)){const o=need();if(/^delete$/i.test(s)){objs.splice(objs.indexOf(o),1);current=null}else o.hidden=/^hide$/i.test(s);continue}throw Error('Unknown command: '+s)
+}catch(e){if(/^Line \d+:/.test(e.message))throw e;throw Error('Line '+row.line+': '+e.message)}}}
+execute(ast);if(cfg.game&&!objs.some(o=>o.type==='player'))throw Error('A game needs one player: spawn player');for(const o of objs){o.homeX=o.x;o.homeY=o.y;if(o.type==='player')o.maxHealth=o.health;if(cfg.game&&['player','enemy','wall','goal','medkit','coin','spawner'].includes(o.type)){if(o.width*o.scale>cfg.worldW||o.height*o.scale>cfg.worldH)throw Error(o.name+' is larger than the world');if(Math.abs(o.x)+o.width*o.scale/2>cfg.worldW/2||Math.abs(o.y)+o.height*o.scale/2>cfg.worldH/2)throw Error(o.name+' lies outside the world')}}const hero=objs.find(o=>o.type==='player');if(hero&&objs.some(o=>o.type==='wall'&&!o.hidden&&overlap(hero,o)))throw Error('Player starts inside a wall');return {objs,cfg,messages,steps}}
+function active(o){return !o.dead&&!o.hidden}function overlap(a,b){return Math.abs(a.x-b.x)<(a.width*a.scale+b.width*b.scale)/2&&Math.abs(a.y-b.y)<(a.height*a.scale+b.height*b.scale)/2}
+function moveBody(o,dx,dy,walls){let blocked=false;const steps=Math.min(120,Math.max(1,Math.ceil(Math.max(Math.abs(dx),Math.abs(dy))/.1)));for(let n=0;n<steps;n++){const oldX=o.x;o.x+=dx/steps;const hx=o.width*o.scale/2,hy=o.height*o.scale/2;o.x=Math.max(-settings.worldW/2+hx,Math.min(settings.worldW/2-hx,o.x));for(const w of walls)if(overlap(o,w)){o.x=oldX;blocked=true;break}const oldY=o.y;o.y+=dy/steps;o.y=Math.max(-settings.worldH/2+hy,Math.min(settings.worldH/2-hy,o.y));for(const w of walls)if(overlap(o,w)){o.y=oldY;blocked=true;break}}return blocked}
+function endGame(won){if(state!=='running')return;state=won?'won':'lost';keys.clear();log((won?'Victory!':'Game over.')+' Score: '+score+' · Time: '+time.toFixed(1)+'s · Enemies defeated: '+kills+'\nPress R in the preview or Run / Restart to play again.')}
+function tick(dt){time+=dt;shotClock=Math.max(0,shotClock-dt);const live=scene.filter(active),walls=live.filter(o=>o.type==='wall'),enemies=live.filter(o=>o.type==='enemy');for(const o of live){o.rotation=(o.rotation+o.spin*dt)%360;if(!['player','enemy'].includes(o.type)){o.x+=o.vx*dt;o.y+=o.vy*dt}o.inv=Math.max(0,o.inv-dt)}
+if(settings.game&&player&&active(player)){let dx=0,dy=0;if(player.control){const a=player.control==='arrows';dx=Number(keys.has(a?'arrowright':'d'))-Number(keys.has(a?'arrowleft':'a'));dy=Number(keys.has(a?'arrowup':'w'))-Number(keys.has(a?'arrowdown':'s'));const len=Math.hypot(dx,dy)||1;dx/=len;dy/=len;if(dx||dy){player.aimX=dx;player.aimY=dy}}moveBody(player,(dx*player.speed+player.vx)*dt,(dy*player.speed+player.vy)*dt,walls);
+if(player.shoot&&keys.has(' ')&&shotClock===0&&bullets.length<200){bullets.push({x:player.x,y:player.y,vx:player.aimX*player.bulletSpeed,vy:player.aimY*player.bulletSpeed,life:2,damage:player.bulletDamage,width:.18,height:.18,scale:1});shotClock=1/player.rate}
+for(const e of enemies){let vx=0,vy=0;if(e.behavior==='chase'){const x=player.x-e.x,y=player.y-e.y,len=Math.hypot(x,y)||1;vx=x/len;vy=y/len}else if(e.behavior==='wander'){const angle=e.id*2.39+Math.floor(time/2)*1.71;vx=Math.cos(angle);vy=Math.sin(angle)}else if(e.behavior==='patrol'){const home=e.axis==='x'?e.homeX:e.homeY;if(e[e.axis]>home+e.radius)e.dir=-1;if(e[e.axis]<home-e.radius)e.dir=1;if(e.axis==='x')vx=e.dir;else vy=e.dir}const blocked=moveBody(e,(vx*e.speed+e.vx)*dt,(vy*e.speed+e.vy)*dt,walls);if(blocked&&e.behavior==='patrol')e.dir*=-1;if(overlap(player,e)&&player.inv===0){player.health=Math.max(0,player.health-e.damage);player.inv=1}}
+for(const o of live){if(o.type==='coin'&&overlap(player,o)){o.dead=true;score+=o.value}if(o.type==='medkit'&&overlap(player,o)&&player.health<player.maxHealth){player.health=Math.min(player.maxHealth,player.health+o.heal);o.dead=true}if(o.type==='spawner'){o.timer+=dt;if(o.timer>=o.interval){o.timer=0;const count=scene.filter(e=>active(e)&&e.type==='enemy').length;if(count<300&&scene.filter(e=>active(e)&&e.owner===o.id).length<o.limit){const e=entity('enemy');e.name='spawned_'+e.id;e.x=o.x;e.y=o.y;e.homeX=e.x;e.homeY=e.y;e.health=o.health;e.maxHealth=e.health;e.damage=o.damage;e.speed=o.speed;e.owner=o.id;if(!walls.some(w=>overlap(e,w)))scene.push(e)}}}}
+}
+for(const b of bullets){b.life-=dt;const steps=Math.max(1,Math.ceil(Math.hypot(b.vx,b.vy)*dt/.1));for(let j=0;j<steps&&b.life>0;j++){b.x+=b.vx*dt/steps;b.y+=b.vy*dt/steps;if(Math.abs(b.x)>settings.worldW/2||Math.abs(b.y)>settings.worldH/2||walls.some(w=>overlap(b,w))){b.life=0;break}const target=scene.find(o=>active(o)&&o.type==='enemy'&&overlap(b,o));if(target){target.health-=b.damage;b.life=0;if(target.health<=0){target.dead=true;score++;kills++}break}}}bullets=bullets.filter(b=>b.life>0);scene=scene.filter(o=>!o.dead);
+if(settings.game&&player){if(player.health<=0){endGame(false);return}if(active(player)&&scene.some(o=>active(o)&&o.type==='goal'&&overlap(player,o))){endGame(true);return}const win=settings.win;if(win&&((win.type==='score'&&score>=win.target)||(win.type==='survive'&&time>=win.target)||(win.type==='clear'&&!scene.some(o=>active(o)&&['enemy','spawner'].includes(o.type)))))endGame(true)}
+}
+function render(){const rect=canvas.getBoundingClientRect(),w=rect.width,h=rect.height,d=Math.min(devicePixelRatio||1,2);if(canvas.width!==Math.round(w*d)||canvas.height!==Math.round(h*d)){canvas.width=Math.round(w*d);canvas.height=Math.round(h*d)}ctx.setTransform(d,0,0,d,0,0);ctx.globalAlpha=1;ctx.fillStyle=settings.background;ctx.fillRect(0,0,w,h);const u=40*settings.zoom;if(settings.camera==='follow'&&player){cam.x=player.x;cam.y=player.y}else cam={x:0,y:0};const sx=x=>w/2+(x-cam.x)*u,sy=y=>h/2-(y-cam.y)*u;
+if(settings.grid){const step=u<12?u*5:u;ctx.beginPath();ctx.strokeStyle='#8ba2c222';ctx.lineWidth=1;for(let x=((w/2-cam.x*u)%step+step)%step;x<w;x+=step){ctx.moveTo(x,0);ctx.lineTo(x,h)}for(let y=((h/2+cam.y*u)%step+step)%step;y<h;y+=step){ctx.moveTo(0,y);ctx.lineTo(w,y)}ctx.stroke()}
+if(settings.game){ctx.strokeStyle='#7390b5';ctx.lineWidth=2;ctx.strokeRect(sx(-settings.worldW/2),sy(settings.worldH/2),settings.worldW*u,settings.worldH*u)}
+for(const o of scene.filter(active).sort((a,b)=>a.z-b.z||a.id-b.id)){ctx.save();ctx.translate(sx(o.x),sy(o.y));ctx.rotate(-o.rotation*Math.PI/180);const scale=o.scale*(1+o.pulse*Math.sin(time*o.hz*Math.PI*2));ctx.scale(scale,scale);ctx.globalAlpha=o.opacity*(o.inv>0&&Math.floor(time*14)%2?.35:1);ctx.fillStyle=o.color;ctx.strokeStyle=o.stroke||o.color;ctx.lineWidth=o.thickness/scale;const bw=o.width*u,bh=o.height*u;
+if(o.type==='text'){ctx.font=16*settings.zoom+'px system-ui';ctx.textAlign=o.align;ctx.textBaseline='middle';const lines=o.text.split('\n');lines.forEach((s,i)=>{const y=(i-(lines.length-1)/2)*19.2*settings.zoom;ctx.fillText(s,0,y);if(o.stroke)ctx.strokeText(s,0,y)})}else{ctx.beginPath();if(['circle','ellipse','coin','spawner'].includes(o.type))ctx.ellipse(0,0,bw/2,bh/2,0,0,Math.PI*2);else if(o.type==='triangle'){ctx.moveTo(0,-bh/2);ctx.lineTo(bw/2,bh/2);ctx.lineTo(-bw/2,bh/2);ctx.closePath()}else if(o.type==='line'){ctx.moveTo(-bw/2,0);ctx.lineTo(bw/2,0)}else ctx.rect(-bw/2,-bh/2,bw,bh);if(o.type==='line')ctx.stroke();else{ctx.fill();if(o.stroke)ctx.stroke()}
+if(o.type==='player'){ctx.fillStyle='#082d29';ctx.beginPath();ctx.arc(o.aimX*bw*.22,-o.aimY*bh*.22,Math.min(bw,bh)*.11,0,Math.PI*2);ctx.fill()}if(o.type==='enemy'){ctx.fillStyle='#381326';ctx.fillRect(-bw*.25,-bh*.15,bw*.15,bh*.15);ctx.fillRect(bw*.1,-bh*.15,bw*.15,bh*.15)}if(o.type==='medkit'){ctx.fillStyle='#103d31';ctx.fillRect(-bw*.09,-bh*.32,bw*.18,bh*.64);ctx.fillRect(-bw*.32,-bh*.09,bw*.64,bh*.18)}if(o.type==='spawner'){ctx.strokeStyle='#fff9';ctx.lineWidth=2/scale;ctx.beginPath();ctx.arc(0,0,bw*.3,0,Math.PI*2);ctx.stroke()}}
+ctx.restore();if(o.type==='enemy'&&o.health<o.maxHealth){ctx.fillStyle='#311d32';ctx.fillRect(sx(o.x)-14,sy(o.y)-o.height*o.scale*u/2-7,28,3);ctx.fillStyle='#ff8ba8';ctx.fillRect(sx(o.x)-14,sy(o.y)-o.height*o.scale*u/2-7,28*Math.max(0,o.health/o.maxHealth),3)}}
+ctx.globalAlpha=1;ctx.fillStyle='#b6fff0';for(const b of bullets){ctx.beginPath();ctx.arc(sx(b.x),sy(b.y),3*settings.zoom,0,Math.PI*2);ctx.fill()}
+if(settings.game&&settings.hud){ctx.fillStyle='#07101ee8';ctx.fillRect(10,10,Math.min(w-20,400),76);ctx.fillStyle='#e6efff';ctx.font='bold 15px system-ui';ctx.fillText(settings.title,22,32);ctx.font='13px system-ui';ctx.fillText('Health '+(player?Math.ceil(player.health):0)+'/'+(player?player.maxHealth:0)+'   Score '+score+'   Time '+time.toFixed(1)+'s',22,54);let objective=settings.win?settings.win.type==='clear'?'Clear all enemies':settings.win.type==='score'?'Reach score '+settings.win.target:'Survive '+settings.win.target+' seconds':'Reach a goal or explore';ctx.fillStyle='#acc3dd';ctx.fillText(objective,22,74)}
+if(['paused','won','lost','stopped'].includes(state)){ctx.fillStyle='#050b17b8';ctx.fillRect(0,0,w,h);ctx.textAlign='center';ctx.fillStyle=state==='won'?'#63e4ce':state==='lost'?'#ff91ab':'#e6efff';ctx.font='bold 30px system-ui';ctx.fillText(({paused:'Paused',won:'Victory!',lost:'Game Over',stopped:'Stopped'})[state],w/2,h/2);ctx.font='14px system-ui';ctx.fillStyle='#d8e4f4';ctx.fillText(state==='paused'?'Press P or Resume to continue':'Press R in preview or Run / Restart',w/2,h/2+32);ctx.textAlign='left'}}
+function frame(now){let dt=last?Math.min((now-last)/1000,.1):0;last=now;if(state==='running'){acc+=dt;let n=0;while(acc>=1/60&&n++<6&&state==='running'){tick(1/60);acc-=1/60}}else acc=0;render();if(now-lastInfo>400){$('status').textContent=state+' · '+scene.filter(active).length+' objects';$('inspector').textContent=scene.slice(0,80).map(o=>o.name+' · '+o.type+' · ('+o.x.toFixed(1)+', '+o.y.toFixed(1)+')'+(['player','enemy'].includes(o.type)?' · HP '+o.health:'')+(o.hidden?' · hidden':'')).join('\n');lastInfo=now}requestAnimationFrame(frame)}
+function run(focus=false){try{const result=compile(editor.value);scene=result.objs;settings=result.cfg;player=scene.find(o=>o.type==='player')||null;bullets=[];time=0;score=0;kills=0;shotClock=0;last=0;acc=0;keys.clear();state='running';$('pause').textContent='Pause';log('Run successful — '+scene.length+' objects, '+result.steps+' commands.\n'+result.messages.join('\n'));try{localStorage.setItem('tidal-game-studio-v1',editor.value)}catch{}if(focus)canvas.focus()}catch(e){state='stopped';keys.clear();log(e.message+'\nPrevious scene retained; runner stopped.',true);const m=e.message.match(/^Line (\d+):/);if(m){const lines=editor.value.split('\n'),i=+m[1]-1,start=lines.slice(0,i).reduce((n,s)=>n+s.length+1,0);editor.focus();editor.setSelectionRange(start,start+(lines[i]?.length||0))}}}
+function pause(){if(state!=='running'&&state!=='paused')return;state=state==='running'?'paused':'running';keys.clear();$('pause').textContent=state==='paused'?'Resume':'Pause'}
+function download(blob,name){const a=document.createElement('a'),url=URL.createObjectURL(blob);a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1500)}
+$('run').onclick=()=>run(true);$('pause').onclick=pause;$('stop').onclick=()=>{state='stopped';keys.clear();$('pause').textContent='Pause'};$('grid').onclick=()=>settings.grid=!settings.grid;$('clear').onclick=()=>log('');$('save').onclick=()=>download(new Blob([editor.value],{type:'text/plain'}),'game.tidal');$('png').onclick=()=>{render();canvas.toBlob(b=>{if(b)download(b,'tidal-game.png')})};$('load').onclick=()=>{if(confirm('Replace the current code with this example?')){editor.value=examples[$('examples').value];run()}};$('open').onclick=()=>$('file').click();$('file').onchange=async e=>{const f=e.target.files[0];if(!f)return;if(f.size>200000)log('Maximum file size is 200 KB.',true);else if(confirm('Replace source with '+f.name+'?')){editor.value=await f.text();run()}e.target.value=''};editor.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();run(true)}else if(e.key==='Tab'){e.preventDefault();editor.setRangeText('  ',editor.selectionStart,editor.selectionEnd,'end')}});canvas.addEventListener('keydown',e=>{const k=e.key.toLowerCase();if(['arrowup','arrowdown','arrowleft','arrowright','w','a','s','d',' ','p','r'].includes(k)){e.preventDefault();if(k==='p'){if(!e.repeat)pause()}else if(k==='r'){if(!e.repeat)run(true)}else keys.add(k)}});window.addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));canvas.addEventListener('blur',()=>{keys.clear();if(state==='running'&&settings.game)pause()});window.addEventListener('blur',()=>{keys.clear();if(state==='running'&&settings.game)pause()});document.addEventListener('visibilitychange',()=>{if(document.hidden&&state==='running'&&settings.game)pause();last=0});let saved;try{saved=localStorage.getItem('tidal-game-studio-v1')}catch{}editor.value=saved||examples['Crystal Run — complete game'];run();if(settings.game)pause();requestAnimationFrame(frame);
+</script></body></html>
