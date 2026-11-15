@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tidal Studio</title><style>
+:root{color-scheme:dark;--bg:#0b1120;--panel:#111d30;--line:#2a3c54;--muted:#9fb1cc;--accent:#63e4ce}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:#e6efff;font:14px system-ui}header{padding:16px 22px;display:flex;align-items:center;gap:18px;border-bottom:1px solid var(--line)}h1{font-size:22px;margin:0}header small{color:var(--muted)}.badge{margin-left:auto;color:var(--accent)}main{padding:16px;display:grid;grid-template-columns:minmax(320px, .95fr) minmax(320px,1.3fr);gap:16px}.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}.bar{padding:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--line)}button,select,input{font:inherit;border:1px solid #3a4d68;border-radius:5px;background:#20334d;color:#e6efff;padding:8px;max-width:100%}button{cursor:pointer}button:hover{filter:brightness(1.2)}button.primary{background:var(--accent);color:#072c27;border:0;font-weight:700}textarea{width:100%;height:490px;display:block;resize:vertical;border:0;background:#080f1c;color:#bdf6e7;padding:18px;font:14px/1.65 ui-monospace,monospace;tab-size:2;outline:none;white-space:pre}textarea:focus{box-shadow:inset 0 0 0 2px #63e4ce77}.stage{position:relative;height:490px;background:#080f1c}canvas{display:block;width:100%;height:100%;outline:none}canvas:focus{box-shadow:inset 0 0 0 2px var(--accent)}.foot{padding:10px 12px;color:var(--muted);font-size:12px;border-top:1px solid var(--line)}#log{margin:0;padding:14px;min-height:110px;max-height:240px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font:13px/1.6 monospace}.error{color:#ffb3b3}.ok{color:#a4e5ce}details{padding:14px;border-top:1px solid var(--line);line-height:1.7}summary{cursor:pointer;color:var(--accent)}code{color:#9be8d8}table{width:100%;border-collapse:collapse;font-size:12px}td,th{padding:7px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}h2{font-size:15px;margin:0}#objects{padding:10px;max-height:220px;overflow:auto}.object{padding:7px;border-bottom:1px solid var(--line);font:12px monospace;overflow-wrap:anywhere}.help{color:var(--muted);padding:10px 14px;line-height:1.5}.file{display:none}@media(max-width:850px){main{grid-template-columns:1fr}.badge{display:none}header{flex-wrap:wrap}.stage{height:400px}}
+</style></head><body><header><h1>Tidal Studio</h1><small>Built for simplicity · local HTML playground</small><span class="badge">2D + language environments</span></header><main><div><section class="panel"><div class="bar"><h2>Source</h2><select id="examples" aria-label="Example program"></select><button id="load">Load example</button></div><textarea id="code" aria-label="Tidal source" spellcheck="false"></textarea><div class="bar"><button id="run" class="primary">Run</button><button id="pause">Pause</button><button id="stop">Stop</button><button id="save">Save .tidal</button><button id="open">Open</button><input id="file" class="file" type="file" accept=".tidal,.txt,text/plain"></div><div class="foot" id="editorStatus">Ctrl/⌘ + Enter to run · Tab to indent</div><details><summary>Language reference</summary><div id="reference"></div></details></section></div><div><section class="panel"><div class="bar"><h2>Renderer</h2><button id="grid">Grid: on</button><button id="fit">Reset view</button><button id="png">Save PNG</button><span id="stats" class="foot"></span></div><div class="stage"><canvas id="canvas" tabindex="0" aria-label="Tidal rendered scene. Focus here for keyboard controls."></canvas></div><div class="help">Coordinates: x right, y up. z is draw order. 1 unit = 40 pixels at zoom 1. Click the preview before using keyboard controls.</div></section><section class="panel" style="margin-top:16px"><div class="bar"><h2>Output</h2><button id="clear">Clear log</button></div><pre id="log" role="status" aria-live="polite"></pre><details><summary>Scene inspector</summary><div id="objects"></div></details></section></div></main><script>
+'use strict';
+const $=id=>document.getElementById(id),editor=$('code'),canvas=$('canvas'),ctx=canvas.getContext('2d');
+const examples={
+'Hello World':`washup language
+// x4 means four times the base text size, not four copies.
+print "Hello World"x4
+color turquoise
+`,
+'Original square':`washup 2D
+spawn square scale (2)
+x 2
+z 2
+y 2
+`,
+'Animated scene':`washup 2D
+washup language
+background #0b1426
+grid off
+print "Tidal"x4 as title
+y 4
+color #c1fff0
+spawn circle as sun
+x 4
+y 1
+scale (2)
+color #ffd166
+pulse 0.15 0.5
+spawn square as diamond
+x -3
+scale (2)
+color #63e4ce
+rotate 45
+spin 35
+spawn triangle as sail
+x 1
+y -2
+scale (2)
+color #a99bff
+spin -25
+print "Built for simplicity"x1.2
+y -4
+color #a7bedb
+`,
+'Keyboard movement':`washup 2D
+washup language
+print "Click preview, then use arrow keys"x1
+y 4
+spawn square as player
+color #63e4ce
+control arrows 4
+spawn circle as marker
+x 4
+color #ffb86b
+`,
+'Shapes and selection':`washup 2D
+washup language
+background #141b2e
+spawn rectangle as panel
+width 7
+height 3
+color #31456a
+z -1
+spawn circle as orb
+x -2
+color #ffd166
+spawn triangle as pointer
+x 2
+color #ee88aa
+rotate -20
+print "Hello World"x2 as label
+y 3
+select orb
+pulse 0.2 1
+select pointer
+spin 20
+`,
+'Variables and repetition':`washup 2D
+washup language
+let size = 0.7
+repeat 7 {
+  spawn square
+  scale (size)
+  x index - 3
+  y sin(index) * 2
+  color hsl(170,70%,60%)
+  spin 20 + index * 10
+}
+print "Seven squares"x2
+y 4
+`};
+const reference=[['Environments','washup language / washup 2D','Import before the corresponding print or spawn command.'],['Text','print "Hello World"x4 as title','Quoted string; optional x multiplier and name. Base size 16px. Escape quotes with \\".'],['Shapes','spawn square | rectangle | circle | triangle | ellipse | line as name','Optional: spawn square scale (2) as box'],['Selection','select name','Following properties affect that object. Names must be unique.'],['Position','x 2 / y -1 / z 3','Absolute coordinates; larger z draws in front.'],['Scale','scale (2)','Positive size multiplier. Text can also use the x suffix.'],['Dimensions','width 3 / height 2','Base dimensions in world units (shapes only).'],['Appearance','color #63e4ce / opacity 0.5 / rotate 45','CSS colors, opacity 0–1, rotation in degrees.'],['Stroke','stroke white / stroke none / thickness 2','Outline color and thickness in pixels. Lines use color.'],['Text alignment','align left | center | right','Text anchor; default center.'],['Scene','background #101827 / grid on / zoom 1.2','Zoom range 0.1–10.'],['Animation','spin 30 / move 1 0 / pulse 0.2 1','Degrees/second; x/y units/second; amplitude and frequency in Hz.'],['Controls','control arrows 4 / control wasd 4 / control off','Units/second. Focus preview to use keys.'],['Visibility','hide / show / delete','Affects the selected object. Delete removes it.'],['Variables','let size = 2 + 1','Numbers; + - * / % ^, parentheses, pi, tau.'],['Math','sin(x), cos(x), abs(x), sqrt(x), min(a,b), max(a,b)','Also floor, ceil, round, tan. No JavaScript execution.'],['Loops','repeat 5 { … }','Brace block across lines; index starts at 0. Max 1000 repetitions.'],['Comments','// comment','Blank lines and trailing comments supported.'],['Output','echo "Scene ready"','Write to runner log (requires washup language).']];
+$('reference').innerHTML='<table><tr><th>Feature</th><th>Syntax</th><th>Behavior</th></tr>'+reference.map(row=>'<tr>'+row.map(t=>'<td>'+escapeHTML(t)+'</td>').join('')+'</tr>').join('')+'</table>';
+function escapeHTML(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+for(const name of Object.keys(examples)){const op=document.createElement('option');op.textContent=name;$('examples').append(op)}
+let scene=[],settings={background:'#0b1426',grid:true,zoom:1},running=false,paused=false,last=0,elapsed=0,keys=new Set(),frameCount=0,inspectorTime=0;
+function log(s,error=false){$('log').className=error?'error':'ok';$('log').textContent=s}
+function stripComment(s){let quote=false,escape=false;for(let i=0;i<s.length;i++){const c=s[i];if(escape){escape=false;continue}if(c==='\\'&&quote){escape=true;continue}if(c==='"')quote=!quote;if(!quote&&c==='/'&&s[i+1]==='/')return s.slice(0,i)}return s}
+function expr(source,vars){const tokens=[];let at=0;while(at<source.length){const rest=source.slice(at);let m;if((m=rest.match(/^\s+/))){at+=m[0].length;continue}if((m=rest.match(/^(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?/i))){tokens.push({type:'n',v:Number(m[0])});at+=m[0].length;continue}if((m=rest.match(/^[A-Za-z_]\w*/))){tokens.push({type:'id',v:m[0]});at+=m[0].length;continue}if('+-*/%^(),'.includes(rest[0])){tokens.push({type:rest[0]});at++;continue}throw Error('Invalid expression character: '+rest[0])}let p=0,depth=0;const peek=t=>tokens[p]?.type===t;function take(t){if(!peek(t))throw Error('Expected '+t+' in expression');return tokens[p++]}const funcs={sin:Math.sin,cos:Math.cos,tan:Math.tan,abs:Math.abs,sqrt:Math.sqrt,floor:Math.floor,ceil:Math.ceil,round:Math.round,min:Math.min,max:Math.max};function atom(){if(++depth>80)throw Error('Expression nesting limit exceeded');let v;if(peek('+')){p++;v=atom()}else if(peek('-')){p++;v=-atom()}else if(peek('n'))v=tokens[p++].v;else if(peek('(')){p++;v=add();take(')')}else if(peek('id')){const name=tokens[p++].v;if(peek('(')){p++;const args=[];if(!peek(')')){args.push(add());while(peek(',')){p++;args.push(add())}}take(')');if(!Object.hasOwn(funcs,name))throw Error('Unknown function '+name);const count=(name==='min'||name==='max')?2:1;if(args.length!==count)throw Error(name+' needs '+count+' argument(s)');v=funcs[name](...args)}else if(Object.hasOwn(vars,name))v=vars[name];else if(name==='pi')v=Math.PI;else if(name==='tau')v=Math.PI*2;else throw Error('Unknown variable '+name)}else throw Error('Expected a number or expression');depth--;return v}function power(){let a=atom();if(peek('^')){p++;a=a**power()}return a}function mul(){let a=power();while(peek('*')||peek('/')||peek('%')){const op=tokens[p++].type,b=power();a=op==='*'?a*b:op==='/'?a/b:a%b}return a}function add(){let a=mul();while(peek('+')||peek('-')){const op=tokens[p++].type,b=mul();a=op==='+'?a+b:a-b}return a}const result=add();if(p!==tokens.length)throw Error('Unexpected expression token');if(!Number.isFinite(result)||Math.abs(result)>1e6)throw Error('Number must be finite and within ±1000000');return result}
+function compile(src){if(src.length>200000)throw Error('Source limit: 200000 characters');const lines=src.split(/\r?\n/).map((s,i)=>({text:stripComment(s).trim(),line:i+1}));let cursor=0;function block(nested=false,depth=0){if(depth>12)throw Error('Repeat nesting limit exceeded');const result=[];while(cursor<lines.length){const row=lines[cursor++];if(!row.text)continue;if(row.text==='}'){if(!nested)throw Error('Line '+row.line+': unexpected }');return result}const m=row.text.match(/^repeat\s+(.+?)\s*\{$/i);if(m)result.push({...row,repeat:m[1],body:block(true,depth+1)});else result.push(row)}if(nested)throw Error('Missing closing } for repeat');return result}const ast=block(),objects=[],imports=new Set(),vars=Object.create(null),messages=[];let current=null,steps=0,serial=0;const config={background:'#0b1426',grid:true,zoom:1};
+const num=s=>expr(s,vars);function positive(s){const v=num(s);if(v<=0)throw Error('Value must be greater than zero');return v}function need(){if(!current)throw Error('Create or select an object first');return current}function color(s){if(!CSS.supports('color',s)||/^(inherit|initial|unset|revert|currentcolor)$/i.test(s)||/var\(/i.test(s))throw Error('Use a concrete CSS color');return s}function nameObject(o,name){if(name&&objects.some(a=>a.name===name))throw Error('Duplicate object name: '+name);o.name=name||'object_'+(++serial);while(!name&&objects.some(a=>a.name===o.name))o.name='object_'+(++serial)}function create(type,name){if(objects.length>=2000)throw Error('Scene limit: 2000 objects');const o={type,x:0,y:0,z:0,scale:1,width:1,height:1,rotation:0,color:'#63e4ce',opacity:1,stroke:null,thickness:1,spin:0,vx:0,vy:0,pulse:0,hz:1,control:null,speed:4,hidden:false,align:'center',order:steps};nameObject(o,name);objects.push(o);current=o;return o}
+function execute(nodes){for(const row of nodes){try{if(++steps>20000)throw Error('Execution limit: 20000 commands');if(row.repeat!==undefined){const n=num(row.repeat);if(!Number.isInteger(n)||n<0||n>1000)throw Error('Repeat count must be an integer from 0 to 1000');const had=Object.hasOwn(vars,'index'),old=vars.index;for(let i=0;i<n;i++){vars.index=i;execute(row.body)}if(had)vars.index=old;else delete vars.index;continue}const s=row.text;let m;
+if((m=s.match(/^washup\s+(\S+)$/i))){const env=m[1].toLowerCase();if(!['2d','language'].includes(env))throw Error('Unknown environment '+m[1]+'. This build supports 2D and language, not 3D.');imports.add(env);continue}
+if((m=s.match(/^let\s+([A-Za-z_]\w*)\s*=\s*(.+)$/i))){if(['pi','tau','index'].includes(m[1]))throw Error('Reserved variable '+m[1]);vars[m[1]]=num(m[2]);continue}
+if((m=s.match(/^(print|echo)\s+("(?:[^"\\]|\\.)*")(.*)$/i))){if(!imports.has('language'))throw Error('Use washup language before '+m[1]);let text;try{text=JSON.parse(m[2])}catch{throw Error('Invalid quoted text. Use JSON-style escapes such as \\" and \\n.')}if(m[1].toLowerCase()==='echo'){if(m[3].trim())throw Error('echo accepts only quoted text');messages.push(text);continue}let tail=m[3].trim(),name;const named=tail.match(/(?:^|\s)as\s+([A-Za-z_]\w*)$/i);if(named){name=named[1];tail=tail.slice(0,named.index).trim()}let scale=1;if(tail){if(!/^x\s*/i.test(tail))throw Error('Use print "text"x4, optionally followed by as name');scale=positive(tail.replace(/^x\s*/i,''))}const o=create('text',name);o.text=text;o.scale=scale;o.color='#e6efff';continue}
+if((m=s.match(/^spawn\s+(square|rectangle|circle|triangle|ellipse|line)(?:\s+scale\s*\((.+)\))?(?:\s+as\s+([A-Za-z_]\w*))?$/i))){if(!imports.has('2d'))throw Error('Use washup 2D before spawn');const o=create(m[1].toLowerCase(),m[3]);if(m[2])o.scale=positive(m[2]);if(o.type==='rectangle')o.width=2;if(o.type==='ellipse')o.width=2;continue}
+if((m=s.match(/^select\s+([A-Za-z_]\w*)$/i))){current=objects.find(o=>o.name===m[1]);if(!current)throw Error('Unknown object '+m[1]);continue}
+if((m=s.match(/^background\s+(.+)$/i))){config.background=color(m[1]);continue}if((m=s.match(/^grid\s+(on|off)$/i))){config.grid=m[1].toLowerCase()==='on';continue}if((m=s.match(/^zoom\s+(.+)$/i))){const n=num(m[1]);if(n<0.1||n>10)throw Error('Zoom range is 0.1–10');config.zoom=n;continue}
+if((m=s.match(/^([xyz])\s+(.+)$/i))){need()[m[1].toLowerCase()]=num(m[2]);continue}if((m=s.match(/^scale\s*\((.+)\)$/i))){need().scale=positive(m[1]);continue}
+if((m=s.match(/^(width|height)\s+(.+)$/i))){const o=need();if(o.type==='text')throw Error('Use scale for text size');o[m[1].toLowerCase()]=positive(m[2]);continue}
+if((m=s.match(/^(color|stroke)\s+(.+)$/i))){need()[m[1].toLowerCase()]=m[1].toLowerCase()==='stroke'&&m[2].toLowerCase()==='none'?null:color(m[2]);continue}
+if((m=s.match(/^(opacity|rotate|spin|thickness)\s+(.+)$/i))){const o=need(),n=num(m[2]),prop=m[1].toLowerCase();if(prop==='opacity'&&(n<0||n>1))throw Error('Opacity range is 0–1');if(prop==='thickness'&&n<0)throw Error('Thickness cannot be negative');o[prop==='rotate'?'rotation':prop]=n;continue}
+if((m=s.match(/^align\s+(left|center|right)$/i))){const o=need();if(o.type!=='text')throw Error('align is for text');o.align=m[1].toLowerCase();continue}
+if((m=s.match(/^move\s+(\S+)\s+(\S+)$/i))){const o=need();o.vx=num(m[1]);o.vy=num(m[2]);continue}
+if((m=s.match(/^pulse\s+(\S+)\s+(\S+)$/i))){const o=need(),a=num(m[1]),hz=num(m[2]);if(a<0||a>=1||hz<0||hz>100)throw Error('Pulse amplitude: 0 to <1; frequency: 0–100 Hz');o.pulse=a;o.hz=hz;continue}
+if((m=s.match(/^control\s+(arrows|wasd)(?:\s+(.+))?$/i))){const o=need();o.control=m[1].toLowerCase();o.speed=m[2]?positive(m[2]):4;continue}if(/^control\s+off$/i.test(s)){need().control=null;continue}
+if(/^(hide|show|delete)$/i.test(s)){const o=need();if(/^delete$/i.test(s)){objects.splice(objects.indexOf(o),1);current=null}else o.hidden=/^hide$/i.test(s);continue}
+throw Error('Unknown command: '+s)
+}catch(e){if(/^Line \d+:/.test(e.message))throw e;throw Error('Line '+row.line+': '+e.message)}}}
+execute(ast);return {objects,config,messages,steps}}
+function render(){const r=canvas.getBoundingClientRect(),dpr=Math.min(window.devicePixelRatio||1,2),w=r.width,h=r.height;if(canvas.width!==Math.round(w*dpr)||canvas.height!==Math.round(h*dpr)){canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr)}ctx.setTransform(dpr,0,0,dpr,0,0);ctx.globalAlpha=1;ctx.fillStyle=settings.background;ctx.fillRect(0,0,w,h);const u=40*settings.zoom,cx=w/2,cy=h/2;if(settings.grid){const step=u<12?u*5:u;ctx.lineWidth=1;ctx.strokeStyle='#7185a51e';ctx.beginPath();for(let x=cx%step;x<w;x+=step){ctx.moveTo(x,0);ctx.lineTo(x,h)}for(let y=cy%step;y<h;y+=step){ctx.moveTo(0,y);ctx.lineTo(w,y)}ctx.stroke();ctx.strokeStyle='#7185a55a';ctx.beginPath();ctx.moveTo(cx,0);ctx.lineTo(cx,h);ctx.moveTo(0,cy);ctx.lineTo(w,cy);ctx.stroke();ctx.fillStyle='#8dabc5';ctx.font='11px system-ui';ctx.fillText('0',cx+4,cy+13);ctx.fillText('+x',w-22,cy-5);ctx.fillText('+y',cx+5,15)}for(const o of [...scene].sort((a,b)=>a.z-b.z||a.order-b.order)){if(o.hidden)continue;ctx.save();ctx.translate(cx+o.x*u,cy-o.y*u);ctx.rotate(-o.rotation*Math.PI/180);const scale=o.scale*(1+o.pulse*Math.sin(elapsed*o.hz*Math.PI*2));ctx.scale(scale,scale);ctx.globalAlpha=o.opacity;ctx.fillStyle=o.color;ctx.strokeStyle=o.stroke||o.color;ctx.lineWidth=o.thickness/scale;const bw=o.width*u,bh=o.height*u;
+if(o.type==='text'){ctx.font=(16*settings.zoom)+'px system-ui';ctx.textAlign=o.align;ctx.textBaseline='middle';const rows=o.text.split('\n');rows.forEach((line,i)=>{const y=(i-(rows.length-1)/2)*19.2*settings.zoom;ctx.fillText(line,0,y);if(o.stroke)ctx.strokeText(line,0,y)})}else{ctx.beginPath();if(o.type==='square'||o.type==='rectangle')ctx.rect(-bw/2,-bh/2,bw,bh);if(o.type==='circle'||o.type==='ellipse')ctx.ellipse(0,0,bw/2,bh/2,0,0,Math.PI*2);if(o.type==='triangle'){ctx.moveTo(0,-bh/2);ctx.lineTo(bw/2,bh/2);ctx.lineTo(-bw/2,bh/2);ctx.closePath()}if(o.type==='line'){ctx.moveTo(-bw/2,0);ctx.lineTo(bw/2,0);ctx.strokeStyle=o.color;ctx.stroke()}else{ctx.fill();if(o.stroke)ctx.stroke()}}ctx.restore()}ctx.globalAlpha=1}
+function update(dt){for(const o of scene){o.x+=o.vx*dt;o.y+=o.vy*dt;o.rotation=(o.rotation+o.spin*dt)%360;if(o.control){const arrow=o.control==='arrows';let dx=Number(keys.has(arrow?'arrowright':'d'))-Number(keys.has(arrow?'arrowleft':'a')),dy=Number(keys.has(arrow?'arrowup':'w'))-Number(keys.has(arrow?'arrowdown':'s'));const length=Math.hypot(dx,dy)||1;o.x+=dx/length*o.speed*dt;o.y+=dy/length*o.speed*dt}o.x=Math.max(-1e6,Math.min(1e6,o.x));o.y=Math.max(-1e6,Math.min(1e6,o.y))}}
+function inspector(){const root=$('objects');root.replaceChildren();if(!scene.length){root.textContent='No objects';return}for(const o of scene.slice(0,100)){const div=document.createElement('div');div.className='object';div.textContent=o.name+' · '+o.type+' · x '+o.x.toFixed(2)+' · y '+o.y.toFixed(2)+' · z '+o.z+' · scale '+o.scale+(o.hidden?' · hidden':'');root.append(div)}if(scene.length>100)root.append(document.createTextNode('Showing first 100 objects.'))}
+function frame(now){const dt=last?Math.min((now-last)/1000,0.05):0;last=now;if(running&&!paused){elapsed+=dt;update(dt)}render();if(now-inspectorTime>500){$('stats').textContent=scene.length+' objects · '+(running?(paused?'paused':'running'):'stopped');inspector();inspectorTime=now}requestAnimationFrame(frame)}
+function run(){try{const result=compile(editor.value);scene=result.objects;settings=result.config;elapsed=0;last=0;keys.clear();running=true;paused=false;$('pause').textContent='Pause';$('grid').textContent='Grid: '+(settings.grid?'on':'off');log('Run successful — '+scene.length+' object(s), '+result.steps+' commands.\n'+result.messages.join('\n'));inspector();try{localStorage.setItem('tidal-studio-source',editor.value)}catch{}}catch(e){running=false;paused=false;keys.clear();log(e.message+'\nPrevious scene retained; animation stopped.',true);const m=e.message.match(/^Line (\d+):/);if(m){const lines=editor.value.split('\n');const start=lines.slice(0,Number(m[1])-1).join('\n').length+(Number(m[1])>1?1:0);editor.focus();editor.setSelectionRange(start,start+lines[Number(m[1])-1].length)}}}
+function download(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1500)}
+$('run').onclick=run;$('pause').onclick=()=>{if(!running)return;paused=!paused;keys.clear();$('pause').textContent=paused?'Resume':'Pause'};$('stop').onclick=()=>{running=false;paused=false;keys.clear();$('pause').textContent='Pause';log('Stopped. Scene retained. Run to restart.')};$('grid').onclick=()=>{settings.grid=!settings.grid;$('grid').textContent='Grid: '+(settings.grid?'on':'off')};$('fit').onclick=()=>settings.zoom=1;$('clear').onclick=()=>log('');$('save').onclick=()=>download(new Blob([editor.value],{type:'text/plain'}),'scene.tidal');$('png').onclick=()=>{render();canvas.toBlob(blob=>{if(blob)download(blob,'tidal-scene.png')})};$('load').onclick=()=>{if(editor.value!==examples[$('examples').value]&&!confirm('Replace the current source with this example?'))return;editor.value=examples[$('examples').value];run()};$('open').onclick=()=>$('file').click();$('file').onchange=async e=>{const file=e.target.files[0];if(!file)return;if(file.size>200000){log('File too large. Maximum 200 KB.',true);return}if(confirm('Replace the current source with '+file.name+'?')){editor.value=await file.text();run()}e.target.value=''};editor.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();run()}else if(e.key==='Tab'){e.preventDefault();editor.setRangeText('  ',editor.selectionStart,editor.selectionEnd,'end')}});editor.addEventListener('input',()=>{$('editorStatus').textContent=editor.value.split('\n').length+' lines · Ctrl/⌘ + Enter to run'});canvas.addEventListener('keydown',e=>{const k=e.key.toLowerCase();if(['arrowup','arrowdown','arrowleft','arrowright','w','a','s','d'].includes(k)){e.preventDefault();keys.add(k)}});window.addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));canvas.addEventListener('blur',()=>keys.clear());window.addEventListener('blur',()=>keys.clear());document.addEventListener('visibilitychange',()=>{keys.clear();last=0});let saved;try{saved=localStorage.getItem('tidal-studio-source')}catch{}editor.value=saved||examples['Hello World'];run();requestAnimationFrame(frame);
+</script></body></html>
